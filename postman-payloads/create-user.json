@@ -1,0 +1,10 @@
+{
+    "firstName": "Alice",
+    "lastName": "smith",
+    "email": "alice.smith@ebank.local",
+    "username": "alice",
+    "phoneNumber": "+0112345678",
+    "address": "Tunis, Tunisia",
+    "role": "USER",
+    "active": true
+}
