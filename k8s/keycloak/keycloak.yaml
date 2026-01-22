@@ -1,0 +1,190 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: keycloak-realm-config
+  namespace: ebank
+data:
+  keycloak-config.json: |
+    {
+      "realm": "ebank",
+      "enabled": true,
+      "displayName": "eBank",
+      "sslRequired": "external",
+      "registrationAllowed": false,
+      "resetPasswordAllowed": true,
+      "loginWithEmailAllowed": true,
+      "roles": {
+        "realm": [
+          { "name": "ADMIN" },
+          { "name": "USER" }
+        ],
+        "client": {
+          "gateway": [
+            { "name": "ADMIN" },
+            { "name": "USER" }
+          ],
+          "account": [
+            { "name": "ADMIN" },
+            { "name": "USER" }
+          ],
+          "userservice": [
+            { "name": "ADMIN" },
+            { "name": "USER" }
+          ],
+          "cardservice": [
+            { "name": "ADMIN" },
+            { "name": "USER" }
+          ],
+          "notificationservice": [
+            { "name": "ADMIN" },
+            { "name": "USER" }
+          ],
+          "transactionservice": [
+            { "name": "ADMIN" },
+            { "name": "USER" }
+          ]
+        }
+      },
+      "clients": [
+        {
+          "clientId": "gateway",
+          "name": "Gateway",
+          "enabled": true,
+          "protocol": "openid-connect",
+          "publicClient": false,
+          "secret": "GehfUy2Oy0wr3n6LOBwACF7RrO3zhpUK",
+          "standardFlowEnabled": true,
+          "directAccessGrantsEnabled": true,
+          "serviceAccountsEnabled": false,
+          "redirectUris": [
+            "http://localhost:8080/*",
+            "http://gateway:8080/*"
+          ],
+          "webOrigins": [
+            "http://localhost:8080",
+            "http://gateway:8080"
+          ]
+        },
+        { "clientId": "account", "enabled": true, "protocol": "openid-connect", "publicClient": true, "standardFlowEnabled": false, "directAccessGrantsEnabled": false },
+        { "clientId": "userservice", "enabled": true, "protocol": "openid-connect", "publicClient": true, "standardFlowEnabled": false, "directAccessGrantsEnabled": false },
+        { "clientId": "cardservice", "enabled": true, "protocol": "openid-connect", "publicClient": true, "standardFlowEnabled": false, "directAccessGrantsEnabled": false },
+        { "clientId": "notificationservice", "enabled": true, "protocol": "openid-connect", "publicClient": true, "standardFlowEnabled": false, "directAccessGrantsEnabled": false },
+        { "clientId": "transactionservice", "enabled": true, "protocol": "openid-connect", "publicClient": true, "standardFlowEnabled": false, "directAccessGrantsEnabled": false }
+      ],
+      "users": [
+        {
+          "username": "ADMIN",
+          "enabled": true,
+          "emailVerified": true,
+          "email": "adminr@ebank.local",
+          "firstName": "ADMIN",
+          "lastName": "Ebank",
+          "credentials": [
+            { "type": "password", "value": "ADMIN", "temporary": false }
+          ],
+          "realmRoles": ["ADMIN"],
+          "clientRoles": {
+            "gateway": ["ADMIN"],
+            "account": ["ADMIN"],
+            "userservice": ["ADMIN"],
+            "cardservice": ["ADMIN"],
+            "notificationservice": ["ADMIN"],
+            "transactionservice": ["ADMIN"]
+          }
+        },
+        {
+          "username": "bob",
+          "enabled": true,
+          "emailVerified": true,
+          "email": "bob@bob.com",
+          "firstName": "BOB",
+          "lastName": "BOB",
+          "credentials": [
+            { "type": "password", "value": "bob", "temporary": false }
+          ],
+          "realmRoles": ["USER"],
+          "clientRoles": {
+            "gateway": ["USER"],
+            "account": ["USER"],
+            "userservice": ["USER"],
+            "cardservice": ["USER"],
+            "notificationservice": ["USER"],
+            "transactionservice": ["USER"]
+          }
+        },
+        {
+          "username": "USER",
+          "enabled": true,
+          "emailVerified": true,
+          "email": "user@ebank.local",
+          "firstName": "Normal",
+          "lastName": "USER",
+          "credentials": [
+            { "type": "password", "value": "USER", "temporary": false }
+          ],
+          "realmRoles": ["USER"],
+          "clientRoles": {
+            "gateway": ["USER"],
+            "account": ["USER"],
+            "userservice": ["USER"],
+            "cardservice": ["USER"],
+            "notificationservice": ["USER"],
+            "transactionservice": ["USER"]
+          }
+        }
+      ]
+    }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: keycloak
+  namespace: ebank
+  labels:
+    app: keycloak
+spec:
+  ports:
+    - port: 8080
+      targetPort: 8080
+      name: http
+  selector:
+    app: keycloak
+  type: NodePort
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: keycloak
+  namespace: ebank
+  labels:
+    app: keycloak
+spec:
+  selector:
+    matchLabels:
+      app: keycloak
+  template:
+    metadata:
+      labels:
+        app: keycloak
+    spec:
+      containers:
+        - name: keycloak
+          image: quay.io/keycloak/keycloak:latest
+          args: ["start-dev", "--import-realm"]
+          ports:
+            - containerPort: 8080
+              name: http
+          env:
+            - name: KEYCLOAK_ADMIN
+              value: "admin"
+            - name: KEYCLOAK_ADMIN_PASSWORD
+              value: "admin"
+            - name: KC_HTTP_ENABLED
+              value: "true"
+          volumeMounts:
+            - name: realm-config
+              mountPath: /opt/keycloak/data/import
+      volumes:
+        - name: realm-config
+          configMap:
+            name: keycloak-realm-config

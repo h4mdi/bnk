@@ -1,0 +1,205 @@
+services:
+  postgres:
+    image: postgres:15
+    container_name: ebank-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./create-databases.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ebank-network
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:latest
+    container_name: ebank-keycloak
+    command: start-dev
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_HTTP_ENABLED: "true"
+    ports:
+      - "8090:8080"
+    volumes:
+      - keycloak_data:/opt/keycloak/data
+    networks:
+      - ebank-network
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:latest
+    container_name: ebank-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    networks:
+      - ebank-network
+
+  # Kafka
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: ebank-kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,PLAINTEXT_INTERNAL://kafka:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT_INTERNAL
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    networks:
+      - ebank-network
+
+  # Kafka UI
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: ebank-kafka-ui
+    depends_on:
+      - kafka
+    ports:
+      - "8091:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+    networks:
+      - ebank-network
+
+  discoveryserver:
+    image: 00devayyoub/ebank-discoveryserver:latest
+    container_name: ebank-discovery
+    ports:
+      - "8761:8761"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+    networks:
+      - ebank-network
+
+  # API Gateway
+  gateway:
+    image: 00devayyoub/ebank-gateway:latest
+    container_name: ebank-gateway
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE: http://discoveryserver:8761/eureka/
+    depends_on:
+      - discoveryserver
+    networks:
+      - ebank-network
+
+  userservice:
+    image: 00devayyoub/ebank-userservice:latest
+    container_name: ebank-user-service
+    ports:
+      - "8081:8081"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE: http://discoveryserver:8761/eureka/
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/ebank_users
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+    depends_on:
+      postgres:
+        condition: service_healthy
+      discoveryserver:
+        condition: service_started
+    networks:
+      - ebank-network
+
+  accountservice:
+    image: 00devayyoub/ebank-accountservice:latest
+    container_name: ebank-account-service
+    ports:
+      - "8082:8082"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE: http://discoveryserver:8761/eureka/
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/ebank_accounts
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+    depends_on:
+      postgres:
+        condition: service_healthy
+      discoveryserver:
+        condition: service_started
+    networks:
+      - ebank-network
+
+  cardservice:
+    image: 00devayyoub/ebank-cardservice:latest
+    container_name: ebank-card-service
+    ports:
+      - "8083:8083"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE: http://discoveryserver:8761/eureka/
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/ebank_cards
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+    depends_on:
+      postgres:
+        condition: service_healthy
+      discoveryserver:
+        condition: service_started
+    networks:
+      - ebank-network
+
+  notificationservice:
+    image: 00devayyoub/ebank-notificationservice:latest
+    container_name: ebank-notification-service
+    ports:
+      - "8084:8084"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE: http://discoveryserver:8761/eureka/
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/ebank_notifications
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+    depends_on:
+      postgres:
+        condition: service_healthy
+      discoveryserver:
+        condition: service_started
+    networks:
+      - ebank-network
+
+  transactionservice:
+    image: 00devayyoub/ebank-transactionservice:latest
+    container_name: ebank-transaction-service
+    ports:
+      - "8085:8085"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE: http://discoveryserver:8761/eureka/
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/ebank_transactions
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+    depends_on:
+      postgres:
+        condition: service_healthy
+      discoveryserver:
+        condition: service_started
+    networks:
+      - ebank-network
+
+volumes:
+  postgres_data:
+  keycloak_data:
+
+networks:
+  ebank-network:
+    driver: bridge
