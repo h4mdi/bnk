@@ -32,7 +32,7 @@ spec:
     spec:
       containers:
         - name: discoveryserver
-          image: 00devayyoub/ebank-discoveryserver:latest
+          image: h4mdi/ebank-discoveryserver:latest
           ports:
             - containerPort: 8761
               name: http
